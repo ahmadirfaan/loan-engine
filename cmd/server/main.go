@@ -59,7 +59,7 @@ func main() {
 	// Setup Gin router
 	router := handler.SetupRouter(productHandler, loanHandler)
 
-	// Create uploads directory
+	// Create uploads directory, for permission mode to read,write,execute (-rwxr-xr-x i)
 	os.MkdirAll("uploads", 0755)
 
 	// Start Outbox Relay worker

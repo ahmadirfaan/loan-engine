@@ -100,13 +100,13 @@ func (h *LoanHandler) ApproveLoan(c *gin.Context) {
 		return
 	}
 
-	err = h.loanService.ApproveLoan(c.Request.Context(), loanID, staffID, file.Filename, filePath)
+	loan, err := h.loanService.ApproveLoan(c.Request.Context(), loanID, staffID, file.Filename, filePath)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": constants.MsgLoanApproved})
+	c.JSON(http.StatusOK, gin.H{"message": constants.MsgLoanApproved, "data": loan})
 }
 
 // GET /api/v1/loans?state=approved
@@ -123,7 +123,7 @@ func (h *LoanHandler) ListLoans(c *gin.Context) {
 		return
 	}
 
-	loans, err := h.loanService.ListLoansByStatus(c.Request.Context(), status)
+	loans, err := h.loanService.ListLoanResponsesByStatus(c.Request.Context(), status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -194,11 +194,11 @@ func (h *LoanHandler) DisburseLoan(c *gin.Context) {
 		return
 	}
 
-	err = h.loanService.DisburseLoan(c.Request.Context(), loanID, staffID, file.Filename, filePath)
+	loan, err := h.loanService.DisburseLoan(c.Request.Context(), loanID, staffID, file.Filename, filePath)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": constants.MsgLoanDisbursed})
+	c.JSON(http.StatusOK, gin.H{"message": constants.MsgLoanDisbursed, "data": loan})
 }

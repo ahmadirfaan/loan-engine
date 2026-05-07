@@ -22,6 +22,7 @@ type LoanRepositoryInterface interface {
 	Create(ctx context.Context, loan *domain.Loan) error
 	GetByID(ctx context.Context, id int64) (*domain.Loan, error)
 	ListByStatus(ctx context.Context, status domain.LoanStatus) ([]*domain.Loan, error)
+	ListInvestmentsByLoanID(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error)
 	Approve(ctx context.Context, loanID int64, staffID int64, documentID int64) error
 	InvestWithOptimisticLock(ctx context.Context, loanID int64, investorID int64, amount float64) (*domain.OrderEvent, error)
 	Disburse(ctx context.Context, loanID int64, staffID int64, agreementDocID int64) error
