@@ -12,7 +12,7 @@ set -eu
 
 BASE_URL="http://localhost:8080/api/v1"
 COMPOSE_PROJECT="loan-engine-e2e"
-COMPOSE_CMD="docker compose -p ${COMPOSE_PROJECT}"
+COMPOSE_CMD="podman compose -p ${COMPOSE_PROJECT}"
 VISIT_FILE="/tmp/visit_proof.txt"
 AGREEMENT_FILE="/tmp/agreement.pdf"
 
