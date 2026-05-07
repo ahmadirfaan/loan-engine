@@ -86,8 +86,10 @@ type Loan struct {
 	Status                LoanStatus `json:"status" db:"status"`
 	ApprovedByStaffID     *int64     `json:"approved_by_staff_id" db:"approved_by_staff_id"`
 	VisitedDocumentID     *int64     `json:"visited_document_id" db:"visited_document_id"`
+	ApprovalAt            *time.Time `json:"approval_at" db:"approval_at"`
 	DisbursedByStaffID    *int64     `json:"disbursed_by_staff_id" db:"disbursed_by_staff_id"`
 	AgreementDocumentID   *int64     `json:"agreement_document_id" db:"agreement_document_id"`
+	DisbursedAt           *time.Time `json:"disbursed_at" db:"disbursed_at"`
 	Version               int        `json:"version" db:"version"`
 	CreatedAt             time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at" db:"updated_at"`
@@ -112,4 +114,33 @@ type OrderEvent struct {
 	EventType string       `json:"event_type" db:"event_type"`
 	CreatedAt time.Time    `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at" db:"updated_at"`
+}
+
+type UserResponse struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type LoanProductResponse struct {
+	ProductName  string  `json:"product_name"`
+	TenorLength  int     `json:"tenor_length"`
+	InterestRate float64 `json:"interest_rate"`
+	ROIRate      float64 `json:"roi_rate"`
+}
+
+type LoanInvestmentResponse struct {
+	Amount         float64   `json:"amount"`
+	InvestmentDate time.Time `json:"investment_date"`
+}
+
+type LoanResponse struct {
+	ID              int64                    `json:"id"`
+	Borrower        UserResponse     		 `json:"borrower"`
+	Product         LoanProductResponse      `json:"product"`
+	PrincipalAmount float64                  `json:"principal_amount"`
+	RemainderAmount float64                  `json:"remainder_amount"`
+	Status          LoanStatus               `json:"status"`
+	HaveInvested    []LoanInvestmentResponse `json:"have_invested"`
+	DateApproval    *time.Time               `json:"date_approval"`
+	DateDisbursed   *time.Time               `json:"date_disbursed"`
 }

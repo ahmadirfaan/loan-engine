@@ -36,6 +36,28 @@ services:
       timeout: 5s
       retries: 5
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loan_engine_app
+    environment:
+      SERVER_PORT: 8080
+      DATABASE_URL: postgres://loan_user:loan_pass@postgres:5432/loan_engine?sslmode=disable
+      RABBITMQ_URL: amqp://rabbit_user:rabbit_pass@rabbitmq:5672/
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/api/v1/loans?state=approved"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres_data:
   rabbitmq_data:

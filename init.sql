@@ -72,8 +72,10 @@ CREATE TABLE loan (
     status                  loan_status NOT NULL DEFAULT 'PROPOSED',
     approved_by_staff_id    BIGINT REFERENCES "user"(id),
     visited_document_id     BIGINT REFERENCES document(id),
+    approval_at             TIMESTAMP NULL,
     disbursed_by_staff_id   BIGINT REFERENCES "user"(id),
     agreement_document_id   BIGINT REFERENCES document(id),
+    disbursed_at            TIMESTAMP NULL,
     version                 INT NOT NULL DEFAULT 1,
     created_at              TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMP NOT NULL DEFAULT NOW()

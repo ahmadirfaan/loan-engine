@@ -4,12 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/hibatullaha/loan-engine/internal/domain"
 )
 
+// ProductRepository stores products in PostgreSQL with a local in-memory cache.
+// Products are treated as near-immutable master data, so a simple sync.Map is
+// sufficient — entries are never evicted and are written once on first access.
 type ProductRepository struct {
-	db *sql.DB
+	db    *sql.DB
+	cache sync.Map // key: int64 product ID → value: *domain.Product
 }
 
 func NewProductRepository(db *sql.DB) *ProductRepository {
@@ -37,10 +42,19 @@ func (r *ProductRepository) Create(ctx context.Context, p *domain.Product) error
 	if err != nil {
 		return fmt.Errorf("product create: %w", err)
 	}
+
+	// Populate cache immediately so subsequent reads are served locally.
+	r.cache.Store(p.ID, p)
 	return nil
 }
 
 func (r *ProductRepository) GetByID(ctx context.Context, id int64) (*domain.Product, error) {
+	// Cache hit — return without touching the database.
+	if v, ok := r.cache.Load(id); ok {
+		return v.(*domain.Product), nil
+	}
+
+	// Cache miss — query the database then populate cache.
 	query := `
 		SELECT id, product_name, tenor_length, payment_frequency, interest_rate, roi_rate, penalty_rate,
 		       min_principal_amount, max_principal_amount, is_active, created_at, updated_at
@@ -59,5 +73,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, id int64) (*domain.Prod
 	if err != nil {
 		return nil, fmt.Errorf("product get by id: %w", err)
 	}
+
+	r.cache.Store(p.ID, p)
 	return p, nil
 }

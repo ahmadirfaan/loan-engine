@@ -34,6 +34,7 @@ type MockLoanRepository struct {
 	CreateFn                    func(ctx context.Context, loan *domain.Loan) error
 	GetByIDFn                   func(ctx context.Context, id int64) (*domain.Loan, error)
 	ListByStatusFn              func(ctx context.Context, status domain.LoanStatus) ([]*domain.Loan, error)
+	ListInvestmentsByLoanIDFn   func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error)
 	ApproveFn                   func(ctx context.Context, loanID int64, staffID int64, documentID int64) error
 	InvestWithOptimisticLockFn  func(ctx context.Context, loanID int64, investorID int64, amount float64) (*domain.OrderEvent, error)
 	DisburseFn                  func(ctx context.Context, loanID int64, staffID int64, agreementDocID int64) error
@@ -49,6 +50,10 @@ func (m *MockLoanRepository) GetByID(ctx context.Context, id int64) (*domain.Loa
 
 func (m *MockLoanRepository) ListByStatus(ctx context.Context, status domain.LoanStatus) ([]*domain.Loan, error) {
 	return m.ListByStatusFn(ctx, status)
+}
+
+func (m *MockLoanRepository) ListInvestmentsByLoanID(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+	return m.ListInvestmentsByLoanIDFn(ctx, loanID)
 }
 
 func (m *MockLoanRepository) Approve(ctx context.Context, loanID int64, staffID int64, documentID int64) error {

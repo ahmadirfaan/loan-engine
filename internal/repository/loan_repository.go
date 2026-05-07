@@ -41,19 +41,12 @@ func (r *LoanRepository) Create(ctx context.Context, loan *domain.Loan) error {
 func (r *LoanRepository) GetByID(ctx context.Context, id int64) (*domain.Loan, error) {
 	query := `
 		SELECT id, borrower_id, product_id, principal_amount, remainder_amount, interest_rate, roi_rate,
-		       status, approved_by_staff_id, visited_document_id, disbursed_by_staff_id,
-		       agreement_document_id, version, created_at, updated_at
+		       status, approved_by_staff_id, visited_document_id, approval_at, disbursed_by_staff_id,
+		       agreement_document_id, disbursed_at, version, created_at, updated_at
 		FROM loan WHERE id = $1`
 
 	loan := &domain.Loan{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&loan.ID, &loan.BorrowerID, &loan.ProductID,
-		&loan.PrincipalAmount, &loan.RemainderAmount,
-		&loan.InterestRate, &loan.ROIRate, &loan.Status,
-		&loan.ApprovedByStaffID, &loan.VisitedDocumentID,
-		&loan.DisbursedByStaffID, &loan.AgreementDocumentID,
-		&loan.Version, &loan.CreatedAt, &loan.UpdatedAt,
-	)
+	err := scanLoanRow(r.db.QueryRowContext(ctx, query, id), loan)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -66,8 +59,8 @@ func (r *LoanRepository) GetByID(ctx context.Context, id int64) (*domain.Loan, e
 func (r *LoanRepository) ListByStatus(ctx context.Context, status domain.LoanStatus) ([]*domain.Loan, error) {
 	query := `
 		SELECT id, borrower_id, product_id, principal_amount, remainder_amount, interest_rate, roi_rate,
-		       status, approved_by_staff_id, visited_document_id, disbursed_by_staff_id,
-		       agreement_document_id, version, created_at, updated_at
+		       status, approved_by_staff_id, visited_document_id, approval_at, disbursed_by_staff_id,
+		       agreement_document_id, disbursed_at, version, created_at, updated_at
 		FROM loan WHERE status = $1
 		ORDER BY created_at DESC`
 
@@ -80,14 +73,7 @@ func (r *LoanRepository) ListByStatus(ctx context.Context, status domain.LoanSta
 	var loans []*domain.Loan
 	for rows.Next() {
 		loan := &domain.Loan{}
-		err := rows.Scan(
-			&loan.ID, &loan.BorrowerID, &loan.ProductID,
-			&loan.PrincipalAmount, &loan.RemainderAmount,
-			&loan.InterestRate, &loan.ROIRate, &loan.Status,
-			&loan.ApprovedByStaffID, &loan.VisitedDocumentID,
-			&loan.DisbursedByStaffID, &loan.AgreementDocumentID,
-			&loan.Version, &loan.CreatedAt, &loan.UpdatedAt,
-		)
+		err := scanLoanRow(rows, loan)
 		if err != nil {
 			return nil, fmt.Errorf("loan list scan: %w", err)
 		}
@@ -96,11 +82,60 @@ func (r *LoanRepository) ListByStatus(ctx context.Context, status domain.LoanSta
 	return loans, rows.Err()
 }
 
+func (r *LoanRepository) ListInvestmentsByLoanID(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+	query := `
+		SELECT id, loan_id, investor_id, amount, roi_rate, document_id_agreement,
+		       is_signed_agreement, created_at, updated_at
+		FROM loan_investment
+		WHERE loan_id = $1
+		ORDER BY created_at ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, loanID)
+	if err != nil {
+		return nil, fmt.Errorf("loan investments by loan id: %w", err)
+	}
+	defer rows.Close()
+
+	investments := make([]*domain.LoanInvestment, 0)
+	for rows.Next() {
+		investment := &domain.LoanInvestment{}
+		var agreementDocID sql.NullInt64
+
+		err := rows.Scan(
+			&investment.ID,
+			&investment.LoanID,
+			&investment.InvestorID,
+			&investment.Amount,
+			&investment.ROIRate,
+			&agreementDocID,
+			&investment.IsSignedAgreement,
+			&investment.CreatedAt,
+			&investment.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("loan investments scan: %w", err)
+		}
+
+		if agreementDocID.Valid {
+			value := agreementDocID.Int64
+			investment.DocumentIDAgreement = &value
+		}
+
+		investments = append(investments, investment)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("loan investments rows: %w", err)
+	}
+
+	return investments, nil
+}
+
 // Approve updates loan to APPROVED status. Uses simple UPDATE (no race condition here since approval is idempotent staff action).
 func (r *LoanRepository) Approve(ctx context.Context, loanID int64, staffID int64, documentID int64) error {
 	query := `
 		UPDATE loan
-		SET status = $1, approved_by_staff_id = $2, visited_document_id = $3, updated_at = NOW()
+		SET status = $1, approved_by_staff_id = $2, visited_document_id = $3, approval_at = NOW(), updated_at = NOW()
 		WHERE id = $4 AND status = $5`
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -230,7 +265,7 @@ func (r *LoanRepository) InvestWithOptimisticLock(ctx context.Context, loanID in
 func (r *LoanRepository) Disburse(ctx context.Context, loanID int64, staffID int64, agreementDocID int64) error {
 	query := `
 		UPDATE loan
-		SET status = $1, disbursed_by_staff_id = $2, agreement_document_id = $3, updated_at = NOW()
+		SET status = $1, disbursed_by_staff_id = $2, agreement_document_id = $3, disbursed_at = NOW(), updated_at = NOW()
 		WHERE id = $4 AND status = $5`
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -247,5 +282,68 @@ func (r *LoanRepository) Disburse(ctx context.Context, loanID int64, staffID int
 	if rowsAffected == 0 {
 		return fmt.Errorf("loan disburse: loan not found or not in INVESTED state")
 	}
+	return nil
+}
+
+type loanRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanLoanRow(scanner loanRowScanner, loan *domain.Loan) error {
+	var approvedByStaffID sql.NullInt64
+	var visitedDocumentID sql.NullInt64
+	var approvalAt sql.NullTime
+	var disbursedByStaffID sql.NullInt64
+	var agreementDocumentID sql.NullInt64
+	var disbursedAt sql.NullTime
+
+	err := scanner.Scan(
+		&loan.ID,
+		&loan.BorrowerID,
+		&loan.ProductID,
+		&loan.PrincipalAmount,
+		&loan.RemainderAmount,
+		&loan.InterestRate,
+		&loan.ROIRate,
+		&loan.Status,
+		&approvedByStaffID,
+		&visitedDocumentID,
+		&approvalAt,
+		&disbursedByStaffID,
+		&agreementDocumentID,
+		&disbursedAt,
+		&loan.Version,
+		&loan.CreatedAt,
+		&loan.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	if approvedByStaffID.Valid {
+		value := approvedByStaffID.Int64
+		loan.ApprovedByStaffID = &value
+	}
+	if visitedDocumentID.Valid {
+		value := visitedDocumentID.Int64
+		loan.VisitedDocumentID = &value
+	}
+	if approvalAt.Valid {
+		value := approvalAt.Time
+		loan.ApprovalAt = &value
+	}
+	if disbursedByStaffID.Valid {
+		value := disbursedByStaffID.Int64
+		loan.DisbursedByStaffID = &value
+	}
+	if agreementDocumentID.Valid {
+		value := agreementDocumentID.Int64
+		loan.AgreementDocumentID = &value
+	}
+	if disbursedAt.Valid {
+		value := disbursedAt.Time
+		loan.DisbursedAt = &value
+	}
+
 	return nil
 }

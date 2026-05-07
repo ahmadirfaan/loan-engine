@@ -34,6 +34,16 @@ func setupLoanHandler() (*LoanHandler, *mocks.MockLoanRepository, *mocks.MockPro
 	userRepo := &mocks.MockUserRepository{}
 	publisher := &mocks.MockPublisher{}
 
+	loanRepo.ListInvestmentsByLoanIDFn = func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+		return []*domain.LoanInvestment{}, nil
+	}
+	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
+		return &domain.Product{ID: id, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8, IsActive: true, MinPrincipalAmount: 1000000, MaxPrincipalAmount: 50000000}, nil
+	}
+	userRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.User, error) {
+		return &domain.User{ID: id, Name: "Default User", Email: "user@example.com", Role: domain.RoleBorrower}, nil
+	}
+
 	loanService := service.NewLoanService(loanRepo, productRepo, documentRepo, outboxRepo, userRepo, publisher)
 	handler := NewLoanHandler(loanService)
 
@@ -60,9 +70,9 @@ func TestProductHandler_CreateProduct_Success(t *testing.T) {
 	}
 
 	body := CreateProductRequest{
-		ProductName:        "Personal Loan",
-		TenorLength:        12,
-		PaymentFrequency:   "MONTHLY",
+		ProductName:        "Biweekly Loan 50W",
+		TenorLength:        50,
+		PaymentFrequency:   "BIWEEKLY",
 		InterestRate:       10.5,
 		ROIRate:            8.0,
 		PenaltyRate:        2.0,
@@ -105,9 +115,9 @@ func TestProductHandler_CreateProduct_ServiceError(t *testing.T) {
 	}
 
 	body := CreateProductRequest{
-		ProductName:        "Good Product",
-		TenorLength:        12,
-		PaymentFrequency:   "MONTHLY",
+		ProductName:        "Biweekly Loan 50W",
+		TenorLength:        50,
+		PaymentFrequency:   "BIWEEKLY",
 		InterestRate:       10.5,
 		ROIRate:            8.0,
 		PenaltyRate:        2.0,
@@ -140,6 +150,9 @@ func TestLoanHandler_CreateLoan_Success(t *testing.T) {
 			MinPrincipalAmount: 1000000, MaxPrincipalAmount: 50000000,
 		}, nil
 	}
+	loanRepo.ListInvestmentsByLoanIDFn = func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+		return []*domain.LoanInvestment{}, nil
+	}
 	loanRepo.CreateFn = func(ctx context.Context, loan *domain.Loan) error {
 		loan.ID = 1
 		loan.Version = 1
@@ -157,6 +170,13 @@ func TestLoanHandler_CreateLoan_Success(t *testing.T) {
 	handler.CreateLoan(c)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, constants.MsgLoanCreated, resp["message"])
+	assert.Equal(t, "PROPOSED", data["status"])
+	assert.NotNil(t, data["borrower"])
+	assert.NotNil(t, data["product"])
 }
 
 func TestLoanHandler_CreateLoan_BadRequest(t *testing.T) {
@@ -197,10 +217,19 @@ func TestLoanHandler_CreateLoan_ServiceError(t *testing.T) {
 // ============================================================
 
 func TestLoanHandler_ListLoans_Success(t *testing.T) {
-	handler, loanRepo, _, _, _, _, _ := setupLoanHandler()
+	handler, loanRepo, productRepo, _, _, userRepo, _ := setupLoanHandler()
 
 	loanRepo.ListByStatusFn = func(ctx context.Context, status domain.LoanStatus) ([]*domain.Loan, error) {
-		return []*domain.Loan{{ID: 1, Status: domain.LoanStatusApproved}}, nil
+		return []*domain.Loan{{ID: 1, BorrowerID: 1, ProductID: 1, Status: domain.LoanStatusApproved}}, nil
+	}
+	loanRepo.ListInvestmentsByLoanIDFn = func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+		return []*domain.LoanInvestment{}, nil
+	}
+	userRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.User, error) {
+		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
+	}
+	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 
 	w := httptest.NewRecorder()
@@ -210,6 +239,10 @@ func TestLoanHandler_ListLoans_Success(t *testing.T) {
 	handler.ListLoans(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].([]interface{})
+	assert.Len(t, data, 1)
 }
 
 func TestLoanHandler_ListLoans_MissingState(t *testing.T) {
@@ -519,10 +552,19 @@ func TestApproveLoan_FullPath_Success(t *testing.T) {
 	router := SetupRouter(productHandler, loanHandler)
 
 	userRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.User, error) {
-		return &domain.User{ID: 4, Role: domain.RoleStaff}, nil
+		if id == 4 {
+			return &domain.User{ID: 4, Role: domain.RoleStaff}, nil
+		}
+		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
+	}
+	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 	loanRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Loan, error) {
-		return &domain.Loan{ID: 1, Status: domain.LoanStatusProposed}, nil
+		return &domain.Loan{ID: 1, BorrowerID: 1, ProductID: 1, Status: domain.LoanStatusProposed}, nil
+	}
+	loanRepo.ListInvestmentsByLoanIDFn = func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+		return []*domain.LoanInvestment{}, nil
 	}
 	documentRepo.CreateFn = func(ctx context.Context, d *domain.Document) error {
 		d.ID = 10
@@ -550,6 +592,7 @@ func TestApproveLoan_FullPath_Success(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.Equal(t, constants.MsgLoanApproved, resp["message"])
+	assert.NotNil(t, resp["data"])
 }
 
 func TestApproveLoan_FullPath_ServiceError(t *testing.T) {
@@ -605,10 +648,19 @@ func TestDisburseLoan_FullPath_Success(t *testing.T) {
 	router := SetupRouter(productHandler, loanHandler)
 
 	userRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.User, error) {
-		return &domain.User{ID: 5, Role: domain.RoleStaff}, nil
+		if id == 5 {
+			return &domain.User{ID: 5, Role: domain.RoleStaff}, nil
+		}
+		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
+	}
+	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 	loanRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Loan, error) {
-		return &domain.Loan{ID: 1, Status: domain.LoanStatusInvested}, nil
+		return &domain.Loan{ID: 1, BorrowerID: 1, ProductID: 1, Status: domain.LoanStatusInvested}, nil
+	}
+	loanRepo.ListInvestmentsByLoanIDFn = func(ctx context.Context, loanID int64) ([]*domain.LoanInvestment, error) {
+		return []*domain.LoanInvestment{}, nil
 	}
 	documentRepo.CreateFn = func(ctx context.Context, d *domain.Document) error {
 		d.ID = 20
@@ -635,6 +687,7 @@ func TestDisburseLoan_FullPath_Success(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.Equal(t, constants.MsgLoanDisbursed, resp["message"])
+	assert.NotNil(t, resp["data"])
 }
 
 func TestDisburseLoan_FullPath_ServiceError(t *testing.T) {
