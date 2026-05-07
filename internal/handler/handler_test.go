@@ -38,7 +38,7 @@ func setupLoanHandler() (*LoanHandler, *mocks.MockLoanRepository, *mocks.MockPro
 		return []*domain.LoanInvestment{}, nil
 	}
 	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
-		return &domain.Product{ID: id, ProductName: "Personal Loan", TenorLength: 12, InterestRate: 10.5, ROIRate: 8, IsActive: true, MinPrincipalAmount: 1000000, MaxPrincipalAmount: 50000000}, nil
+		return &domain.Product{ID: id, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8, IsActive: true, MinPrincipalAmount: 1000000, MaxPrincipalAmount: 50000000}, nil
 	}
 	userRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.User, error) {
 		return &domain.User{ID: id, Name: "Default User", Email: "user@example.com", Role: domain.RoleBorrower}, nil
@@ -70,9 +70,9 @@ func TestProductHandler_CreateProduct_Success(t *testing.T) {
 	}
 
 	body := CreateProductRequest{
-		ProductName:        "Personal Loan",
-		TenorLength:        12,
-		PaymentFrequency:   "MONTHLY",
+		ProductName:        "Biweekly Loan 50W",
+		TenorLength:        50,
+		PaymentFrequency:   "BIWEEKLY",
 		InterestRate:       10.5,
 		ROIRate:            8.0,
 		PenaltyRate:        2.0,
@@ -115,9 +115,9 @@ func TestProductHandler_CreateProduct_ServiceError(t *testing.T) {
 	}
 
 	body := CreateProductRequest{
-		ProductName:        "Good Product",
-		TenorLength:        12,
-		PaymentFrequency:   "MONTHLY",
+		ProductName:        "Biweekly Loan 50W",
+		TenorLength:        50,
+		PaymentFrequency:   "BIWEEKLY",
 		InterestRate:       10.5,
 		ROIRate:            8.0,
 		PenaltyRate:        2.0,
@@ -229,7 +229,7 @@ func TestLoanHandler_ListLoans_Success(t *testing.T) {
 		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
 	}
 	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
-		return &domain.Product{ID: 1, ProductName: "Personal Loan", TenorLength: 12, InterestRate: 10.5, ROIRate: 8}, nil
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 
 	w := httptest.NewRecorder()
@@ -558,7 +558,7 @@ func TestApproveLoan_FullPath_Success(t *testing.T) {
 		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
 	}
 	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
-		return &domain.Product{ID: 1, ProductName: "Personal Loan", TenorLength: 12, InterestRate: 10.5, ROIRate: 8}, nil
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 	loanRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Loan, error) {
 		return &domain.Loan{ID: 1, BorrowerID: 1, ProductID: 1, Status: domain.LoanStatusProposed}, nil
@@ -654,7 +654,7 @@ func TestDisburseLoan_FullPath_Success(t *testing.T) {
 		return &domain.User{ID: 1, Name: "Alice", Email: "alice@example.com", Role: domain.RoleBorrower}, nil
 	}
 	productRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Product, error) {
-		return &domain.Product{ID: 1, ProductName: "Personal Loan", TenorLength: 12, InterestRate: 10.5, ROIRate: 8}, nil
+		return &domain.Product{ID: 1, ProductName: "Biweekly Loan 50W", TenorLength: 50, PaymentFrequency: "BIWEEKLY", InterestRate: 10.5, ROIRate: 8}, nil
 	}
 	loanRepo.GetByIDFn = func(ctx context.Context, id int64) (*domain.Loan, error) {
 		return &domain.Loan{ID: 1, BorrowerID: 1, ProductID: 1, Status: domain.LoanStatusInvested}, nil

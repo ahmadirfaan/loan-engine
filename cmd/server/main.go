@@ -31,14 +31,17 @@ func main() {
 	log.Println("Connected to PostgreSQL")
 
 	// Connect to RabbitMQ
+	// Use a typed interface variable so a failed connection yields a true nil interface,
+	// not a (*RabbitMQ)(nil) wrapped in a non-nil interface (which would bypass nil checks).
+	var rmqPublisher rabbitmq.Publisher
 	rmq, err := rabbitmq.NewRabbitMQ(cfg.RabbitMQURL)
 	if err != nil {
 		log.Printf("WARNING: Failed to connect to RabbitMQ: %v (outbox relay will retry)", err)
-		// Don't fatally exit — the app can still process requests, outbox relay will retry
-		rmq = nil
+		// rmqPublisher stays nil — publishOutboxEvent will skip publishing
 	} else {
 		defer rmq.Close()
 		log.Println("Connected to RabbitMQ")
+		rmqPublisher = rmq
 	}
 
 	// Initialize repositories
@@ -50,7 +53,7 @@ func main() {
 
 	// Initialize services
 	productService := service.NewProductService(productRepo)
-	loanService := service.NewLoanService(loanRepo, productRepo, documentRepo, outboxRepo, userRepo, rmq)
+	loanService := service.NewLoanService(loanRepo, productRepo, documentRepo, outboxRepo, userRepo, rmqPublisher)
 
 	// Initialize handlers
 	productHandler := handler.NewProductHandler(productService)
@@ -66,7 +69,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if rmq != nil {
+	if rmqPublisher != nil {
 		relay := worker.NewOutboxRelay(outboxRepo, rmq)
 		relay.Start(ctx)
 	}

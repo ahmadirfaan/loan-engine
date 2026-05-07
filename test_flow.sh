@@ -4,7 +4,7 @@
 # Boots docker-compose, resets PostgreSQL, reapplies init.sql, then
 # verifies the full loan state machine and investment variants.
 #
-# Requirements: docker compose, curl, grep, sed, awk
+# Requirements: docker compose (or podman compose), curl, grep, sed, awk
 # No jq dependency!
 # ============================================================
 
@@ -15,6 +15,20 @@ COMPOSE_PROJECT="loan-engine-e2e"
 COMPOSE_CMD="docker compose -p ${COMPOSE_PROJECT}"
 VISIT_FILE="/tmp/visit_proof.txt"
 AGREEMENT_FILE="/tmp/agreement.pdf"
+
+# ============================================================
+# Detect bash version and choose the safest uppercase helper.
+# bash 4+ supports ${var^^}; bash 3.x (macOS default) does not.
+# ============================================================
+BASH_MAJOR="${BASH_VERSINFO[0]:-3}"
+to_upper() {
+    if [ "${BASH_MAJOR}" -ge 4 ]; then
+        local _s="$1"
+        echo "${_s^^}"
+    else
+        echo "$1" | tr '[:lower:]' '[:upper:]'
+    fi
+}
 
 # ============================================================
 # Colors & Formatting
@@ -106,7 +120,7 @@ assert_loan_in_state() {
     api_request "200" "List loans in state $state" -X GET "$BASE_URL/loans?state=$state"
 
     if echo "$BODY" | grep -q "\"id\":$loan_id"; then
-        print_success "Loan $loan_id confirmed in state ${state^^}"
+        print_success "Loan $loan_id confirmed in state $(to_upper "$state")"
     else
         print_error "Loan $loan_id not found in state ${state^^}"
         exit 1
@@ -120,9 +134,9 @@ create_product() {
     api_request "201" "Create Product" -X POST "$BASE_URL/products" \
         -H "Content-Type: application/json" \
         -d '{
-            "product_name": "Personal Loan Gold",
-            "tenor_length": 12,
-            "payment_frequency": "MONTHLY",
+            "product_name": "Biweekly Loan 50W",
+            "tenor_length": 50,
+            "payment_frequency": "BIWEEKLY",
             "interest_rate": 10.50,
             "roi_rate": 8.00,
             "penalty_rate": 2.00,

@@ -53,8 +53,9 @@ func newLoanServiceWithMocks() (*LoanService, *loanServiceMocks) {
 func productFixture() *domain.Product {
 	return &domain.Product{
 		ID:                 1,
-		ProductName:        "Personal Loan",
-		TenorLength:        12,
+		ProductName:        "Biweekly Loan 50W",
+		TenorLength:        50,
+		PaymentFrequency:   "BIWEEKLY",
 		InterestRate:       10.5,
 		ROIRate:            8.0,
 		MinPrincipalAmount: 1000000,
@@ -87,7 +88,7 @@ func TestLoanService_CreateLoan_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), loan.ID)
 	assert.Equal(t, "Alice Borrower", loan.Borrower.Name)
-	assert.Equal(t, "Personal Loan", loan.Product.ProductName)
+	assert.Equal(t, "Biweekly Loan 50W", loan.Product.ProductName)
 	assert.Equal(t, domain.LoanStatusProposed, loan.Status)
 	assert.Equal(t, 5000000.0, loan.RemainderAmount)
 	assert.Empty(t, loan.HaveInvested)
@@ -737,7 +738,7 @@ func TestLoanService_ListLoanResponsesByStatus_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, loans, 1)
-	assert.Equal(t, 12, loans[0].Product.TenorLength)
+	assert.Equal(t, 50, loans[0].Product.TenorLength)
 	assert.Len(t, loans[0].HaveInvested, 1)
 	assert.NotNil(t, loans[0].DateApproval)
 }
